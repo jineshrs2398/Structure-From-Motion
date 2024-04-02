@@ -109,4 +109,80 @@ class SFMMap():
         self.visiblility_matrix = np.vstack(visibility_mat)
 
 
-        
+    def get_feat_matches(self, img_pair, num_of_samples= -1):
+        """
+        Returns all feature matches b/w given image pair unless num_of_samples
+        is provided in which case it randomly returns that many samples from the
+        image features
+        imputs:
+            img_pair: (i,j)
+            num_of_samples: int (If -1, return all)
+        """
+
+        ith_view, jth_view = img_pair
+        i, j = ith_view -1, jth_view -1
+
+        # Get features common in i and j
+        idxs = np.where(
+            np.logical_and(
+                self.visiblility_matrix[:, i],
+                self.visiblility_matrix[:, j]
+            )
+        )[0]
+
+        # Get num_of_samples from common features
+        if num_of_samples >0:
+            idxs = np.random.sample(idxs, num_of_samples)  # num_of_smaples
+
+        vi = [self.features_u[idxs, i], self.features_v[idxs, i]] #list(N, , N,)
+        vj = [self.features_u[idxs, j], self.features_v[idxs, j]] #list(N, , N,)
+
+        vi = np.vstack(vi).T
+        vj = np.vstack(vj).T
+
+        return vi, vj, idxs
+    
+    def remove_matches(self, img_pair, outlier_idxs) -> None:
+        """
+        inputs:
+            img_pair: (i,j)
+        """
+        _, jth_view = img_pair
+        j = jth_view -  1
+
+        self.visiblility_matrix[outlier_idxs, j] = False
+
+    def get_2d_to_3d_correspondences(self, ith_view):
+        """
+        inputs:
+            ith_view: view for which we need 2D <-> 3D correspondences
+        outputs:
+            v: M x 2 - features
+            X: M x 3 - corresponding world points
+        """
+        i = ith_view - 1 
+
+        # get indices from world_points wher it is no nan
+        indices_world = np.argwhere(~np.isnan(self.world_points[:,0])).flatten()
+
+        #we will get indices for the ith_view from visibility_matrix
+        indices_visibility = np.where(self.visiblility_matrix[:,i])[0]
+
+        #find intersection of indices_world and indices_visibility
+        indices = np.array(list(set(indices_world) & set(indices_visibility)))
+
+        v = [self.features_u[indices, i], self.features_v[indices, i]]
+        v = np.vstack(v).T
+
+        X = self.world_points[indices]
+        return v, X
+
+    def add_world_points(self, world_points, indices):
+        """
+        inputs:
+            world_points: M x 3
+            indices: M,
+        outputs:
+            None
+        """
+        self.world_points[indices] = world_points
